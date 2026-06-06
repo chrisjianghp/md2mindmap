@@ -18,7 +18,7 @@ Before generating, it asks the user two questions:
 Clone into your Claude Code skills directory:
 
 ```bash
-git clone https://github.com/<your-username>/md2mindmapinlarkdoc.git ~/.claude/skills/md2mindmapinlarkdoc
+git clone https://github.com/chrisjianghp/md2mindmapinlarkdoc.git ~/.claude/skills/md2mindmapinlarkdoc
 ```
 
 That's it. Claude Code will pick up the skill on the next session.
