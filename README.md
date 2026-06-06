@@ -1,17 +1,22 @@
 # md2mindmapinlarkdoc
 
-A [Claude Code Skill](https://docs.claude.com/claude-code) that converts Markdown files or Lark/Feishu documents into Mermaid mindmaps rendered on a Lark whiteboard.
+A [Claude Code Skill](https://docs.claude.com/claude-code) that converts a **Markdown document** — local file or online URL — into a Mermaid mindmap rendered on a Lark/Feishu whiteboard inside a freshly-created Lark doc.
 
 ## What it does
 
-Two modes:
+Two input modes, same output (a new Lark doc with the mindmap):
 
-- **Mode A — Local MD file → New Lark doc**: Read a local `.md` file, parse its heading structure, create a new Lark document containing a whiteboard mindmap.
-- **Mode B — Lark doc URL → Update existing whiteboard**: Read an existing Lark document, parse its structure (headings, callouts, checkboxes, tables, etc.), and replace its whiteboard content with a mindmap.
+- **Mode A — Local MD file**: Path like `~/path/to/README.md` or `./docs/intro.md`. Read with the `Read` tool.
+- **Mode B — Online MD URL**: A URL pointing to raw markdown — GitHub raw links (`https://raw.githubusercontent.com/...`), GitHub blob pages (auto-converted to raw), or any HTTP(S) link returning markdown text. Fetched with `WebFetch`.
 
 Before generating, it asks the user two questions:
+
 1. **Language**: keep the source language (recommended for technical docs) or translate to Chinese
 2. **Depth**: title skeleton only, or titles + short summaries
+
+Then it parses the heading hierarchy (h1–h6), generates a Mermaid mindmap, creates a new Lark doc with a blank whiteboard, and writes the mindmap into the whiteboard.
+
+> **Not in scope**: parsing Lark / Notion / Confluence / other rich-text systems. This skill handles plain Markdown text only.
 
 ## Installation
 
@@ -33,10 +38,11 @@ That's it. Claude Code will pick up the skill on the next session.
 
 Just ask Claude things like:
 
-- "把这个 md 文件变成思维导图：~/path/to/file.md"
-- "Read this Lark doc and turn the whiteboard into a mindmap: https://xxx.feishu.cn/docx/..."
-- "可视化一下这个文档的结构"
-- "帮我看下这个 md 的结构"
+- "把这个 md 文件变成思维导图：~/path/to/README.md"
+- "帮我看下这个 md 的结构：~/Documents/foo.md"
+- "可视化一下这个 GitHub 文档：https://raw.githubusercontent.com/owner/repo/main/README.md"
+- "把这个 README 用飞书画板画出来"
+- "Turn this markdown into a Lark whiteboard mindmap: <url-or-path>"
 
 The skill triggers automatically based on your phrasing.
 
