@@ -260,8 +260,10 @@ markmap:
 
 创建一个 `.html` 文件，内嵌：
 1. 深色主题 CSS（背景 `#1a1a2e`，浅色文字，提示条）
-2. 一个 `<div class="markmap"><script type="text/template">...</script></div>` 容器
-3. CDN 引用 `markmap-autoloader`（从 jsdelivr 加载稳定版），由 autoloader 自动渲染
+2. 右上角工具栏，包含「导出 PDF」按钮
+3. 一个 `<div class="markmap"><script type="text/template">...</script></div>` 容器
+4. CDN 引用 `markmap-autoloader`（从 jsdelivr 加载稳定版），由 autoloader 自动渲染
+5. `html2canvas` CDN：导出 PDF 时把当前思维导图 DOM 截成 PNG，再通过浏览器打印保存为 PDF
 
 **优先使用 `markmap-autoloader`，不要手写 `new Markmap(...)` 初始化。**手写初始化在不同 CDN 版本和本地 `file://` 打开时容易因为全局对象暴露差异导致 Chrome 空白或渲染不正常；autoloader 是官方推荐的最稳嵌入方式。
 
@@ -282,26 +284,62 @@ markmap:
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
   .header {
-    position: fixed; top: 12px; left: 16px; z-index: 10;
+    position: fixed; top: 12px; left: 16px; z-index: 1000;
     color: rgba(255,255,255,0.82);
     background: rgba(255,255,255,0.08);
     border: 1px solid rgba(255,255,255,0.12);
     border-radius: 10px; padding: 8px 12px;
     backdrop-filter: blur(10px); font-size: 14px;
   }
+  .toolbar {
+    position: fixed; top: 12px; right: 16px; z-index: 1000;
+    display: flex; gap: 8px;
+  }
+  .toolbar button {
+    color: rgba(255,255,255,0.86);
+    background: rgba(255,255,255,0.10);
+    border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 10px; padding: 8px 12px;
+    backdrop-filter: blur(10px); font-size: 13px;
+    cursor: pointer;
+  }
+  .toolbar button:hover { background: rgba(255,255,255,0.18); }
   .hint {
-    position: fixed; bottom: 12px; left: 16px; z-index: 10;
+    position: fixed; bottom: 12px; left: 16px; z-index: 1000;
     color: rgba(255,255,255,0.45); font-size: 12px;
     background: rgba(0,0,0,0.18);
     border-radius: 8px; padding: 6px 10px;
   }
   .markmap { width: 100vw; height: 100vh; }
   .markmap > svg { width: 100%; height: 100%; display: block; }
+  .markmap text,
+  .markmap foreignObject,
+  .markmap foreignObject *,
+  .markmap .markmap-node text,
+  .markmap .markmap-node div,
+  .markmap .markmap-node span {
+    color: rgba(255,255,255,0.96) !important;
+    fill: rgba(255,255,255,0.96) !important;
+    -webkit-text-fill-color: rgba(255,255,255,0.96) !important;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+  }
+  @media print {
+    @page { size: landscape; margin: 0; }
+    html, body {
+      background: #fff !important;
+      overflow: visible;
+    }
+    .header, .toolbar, .hint { display: none !important; }
+    .markmap { width: 100vw; height: 100vh; background: #fff !important; }
+  }
 </style>
 </head>
 <body>
 <div class="header">__TITLE__ — mindmap</div>
-<div class="hint">Drag to pan · Scroll to zoom · Click nodes to fold/unfold</div>
+<div class="toolbar">
+  <button onclick="exportPDF()">导出 PDF</button>
+</div>
+<div class="hint">Drag to pan · Scroll to zoom · Click nodes to fold/unfold · Export PDF via browser print</div>
 
 <div class="markmap">
 <script type="text/template">
@@ -310,6 +348,70 @@ __MARKDOWN_CONTENT__
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/markmap-autoloader@0.17"></script>
+<script>
+function loadHtml2Canvas() {
+  if (window.html2canvas) return Promise.resolve(window.html2canvas);
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+    script.onload = () => resolve(window.html2canvas);
+    script.onerror = () => reject(new Error('html2canvas 加载失败，请检查网络或 CDN 访问'));
+    document.head.appendChild(script);
+  });
+}
+
+async function exportPDF() {
+  const target = document.querySelector('.markmap');
+  if (!target || !target.querySelector('svg')) {
+    alert('思维导图还未渲染完成，请稍等 1 秒后重试');
+    return;
+  }
+
+  // Open the print window synchronously in the click handler.
+  // If we wait until async rendering finishes, Chrome may block it as a popup.
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    alert('浏览器拦截了打印窗口，请允许弹窗后重试');
+    return;
+  }
+  printWindow.document.write(`<!doctype html>
+<html><head><meta charset="utf-8"><title>Preparing PDF</title>
+<style>body{margin:0;display:grid;place-items:center;height:100vh;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#1a1a2e;color:#fff}</style>
+</head><body>正在生成 PDF 预览…</body></html>`);
+  printWindow.document.close();
+
+  try {
+    const html2canvas = await loadHtml2Canvas();
+    const canvas = await html2canvas(target, {
+      backgroundColor: '#1a1a2e',
+      scale: Math.min(2, window.devicePixelRatio || 1.5),
+      useCORS: true,
+      logging: false,
+      width: target.clientWidth,
+      height: target.clientHeight,
+      windowWidth: document.documentElement.clientWidth,
+      windowHeight: document.documentElement.clientHeight,
+    });
+    const png = canvas.toDataURL('image/png');
+
+    printWindow.document.open();
+    printWindow.document.write(`<!doctype html>
+<html><head><meta charset="utf-8"><title>Mindmap PDF</title>
+<style>
+  @page { size: landscape; margin: 0; }
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #1a1a2e; }
+  img { width: 100vw; height: 100vh; object-fit: contain; display: block; }
+</style></head><body><img src="${png}" /></body></html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 500);
+  } catch (err) {
+    printWindow.document.open();
+    printWindow.document.write(`<pre style="white-space:pre-wrap;font-family:sans-serif;padding:24px;color:#111">导出失败：${String(err && err.message || err)}\n\n请检查网络是否能访问 cdn.jsdelivr.net，或刷新页面后重试。</pre>`);
+    printWindow.document.close();
+  }
+}
+</script>
 </body>
 </html>
 ```
@@ -332,6 +434,7 @@ open /tmp/[文件名]-mindmap.html
 告知用户：
 - 文件路径
 - 交互方式：拖拽平移、滚轮缩放、点击节点折叠/展开
+- 导出 PDF：点击右上角「导出 PDF」按钮，脚本会用 `html2canvas` 把当前思维导图 DOM 截成 PNG 图片，再打开打印对话框；选择「保存为 PDF」即可。使用位图导出是为了避免 Chrome 打印 SVG `foreignObject` 时丢失中文文字
 - 文件完全自包含（除了 CDN 引用），可以复制到任何地方
 
 示例：
@@ -342,8 +445,8 @@ open /tmp/[文件名]-mindmap.html
 
 交互方式：
 - 🖱 拖拽平移 | 滚轮缩放
-- 右上角按钮：自适应 / 放大 / 缩小
 - 点击节点折叠/展开子节点
+- 右上角按钮：导出 PDF（打开浏览器打印对话框，选择"保存为 PDF"）
 - 零依赖，浏览器直接打开即可
 ```
 
@@ -452,3 +555,5 @@ mindmap
 - **HTML 中 Markdown 内容含 `</script>`**：在嵌入 `<script type="text/template">` 前替换为 `<\/script>`，避免提前结束 script 标签
 - **CDN 加载失败**（离线环境）：告知用户 Markmap 需要首次加载时联网拉取 CDN 资源，之后浏览器缓存可离线使用
 - **Chrome 打开 HTML 显示空白或不正常**：优先确认模板使用的是 `markmap-autoloader`，不要使用手写 `new Markmap(...)` 初始化；必要时换用 `open -a "Google Chrome" /tmp/xxx.html` 重新打开
+- **导出 PDF 行为**：HTML 内的「导出 PDF」按钮会通过 `html2canvas` 把当前思维导图 DOM 截成 PNG 位图，再在新窗口打印。用户需要在系统打印面板中选择"保存为 PDF"。不要承诺自动下载 PDF 文件
+- **PDF 只有线没有文字 / 中文丢失**：这是 Chrome 打印 SVG `foreignObject` 或 SVG `<text>` 字体嵌入的常见问题。不要依赖 CSS 改文字颜色，也不要把 `foreignObject` 转成 `<text>`；模板应使用 `html2canvas` 截图为 PNG 的导出方案，牺牲文字可选中性来保证视觉正确
