@@ -4,21 +4,25 @@ description: >
   解析 Markdown 文档的结构（标题层级）并生成飞书思维导图画板。支持两种输入：
   (1) 本地 .md 文件路径；
   (2) 在线 Markdown URL（如 GitHub raw、原始 .md 链接、HTTP(S) 上托管的 markdown）。
-  无论哪种来源，都会创建一个新的飞书文档，并在文档中嵌入一个用 Mermaid mindmap 渲染的画板。
+  无论哪种来源，都支持三种输出格式（由用户选择）：
+  - 飞书文档（含 Mermaid mindmap 画板）
+  - 本地 HTML 文件（用 Markmap 渲染的交互式思维导图，支持缩放/折叠/搜索）
+  - 同时输出两者
   当用户想要快速理解一份 Markdown 文档的结构、看骨架、生成思维导图、可视化层级时使用此 skill。
   即使用户没有明确说"思维导图"或"画板"，只要意图是理解 MD 文档的整体结构或层级，都应该触发此 skill。
   常见触发语句："帮我看下这个 md 的结构"、"这个文档讲了什么"、"把 md 变成思维导图"、
-  "可视化这个 README"、"用画板展示文档结构"、"github 上这个 md 文件的思维导图"。
+  "可视化这个 README"、"用画板展示文档结构"、"github 上这个 md 文件的思维导图"、
+  "生成 HTML 思维导图"、"本地打开看看"。
 ---
 
-# Markdown → 飞书思维导图
+# Markdown → 思维导图
 
-将 Markdown 文档（本地或在线）的结构解析出来，生成 Mermaid 思维导图，
-**新建**一个飞书文档并把思维导图嵌入文档中的画板，帮助用户一眼看清文档骨架。
+将 Markdown 文档（本地或在线）的结构解析出来，生成思维导图，帮助用户一眼看清文档骨架。
+支持两种输出格式（由用户选择）：飞书文档（含 Mermaid mindmap 画板）、本地 HTML 文件（Markmap 交互式）、或两者都要。
 
 ## 两种输入模式
 
-两种模式的产出完全一致：**新建飞书文档 + 思维导图画板**。区别只在于 MD 内容从哪里读：
+两种模式的产出完全一致。区别只在于 MD 内容从哪里读：
 
 ### 模式 A：本地 MD 文件
 
@@ -39,7 +43,7 @@ description: >
 
 ## 必答问题：在生成画板前必须询问
 
-**在创建飞书文档之前，无论是模式 A 还是模式 B，都必须先通过 `AskUserQuestion` 工具询问用户两个问题。两个问题在一次 `AskUserQuestion` 调用中一起问，不要分两次问。**
+**在创建飞书文档之前，无论是模式 A 还是模式 B，都必须先通过 `AskUserQuestion` 工具询问用户三个问题。三个问题在一次 `AskUserQuestion` 调用中一起问，不要分多次问。**
 
 ### 问题 1：语言选择
 
@@ -67,9 +71,18 @@ description: >
 
 用户选择"标题加简短摘要"时：按下方「Step 1: 解析 MD 文档结构」中的摘要规则提取（首句、≤ 30 字）。
 
+### 问题 3：输出格式
+
+- header：`Format`（≤ 12 字）
+- question：`思维导图以什么格式输出？`
+- 选项（固定三个，不要自行扩展）：
+  1. `飞书文档` — 描述："创建飞书文档，思维导图嵌入文档中的 Mermaid 画板"
+  2. `HTML 文件` — 描述："生成本地 HTML 文件，用 Markmap 渲染交互式思维导图，支持缩放/折叠/搜索，浏览器直接打开"
+  3. `两者都要` — 描述："同时生成飞书文档和 HTML 文件"
+
 ### 询问时机
 
-读完 MD 内容、识别出标题结构之后，**调用 `docs +create` 之前**。两个问题都回答后再继续。
+读完 MD 内容、识别出标题结构之后，**调用 `docs +create` 或生成 HTML 之前**。三个问题都回答后再继续。
 
 ---
 
@@ -102,18 +115,34 @@ description: >
 
 ## Step 2: 询问用户（必答问题）
 
-执行上面「必答问题」一节描述的 `AskUserQuestion` 调用，拿到 Language 和 Depth 两个选择。
+执行上面「必答问题」一节描述的 `AskUserQuestion` 调用，拿到 Language、Depth、Format 三个选择。
 
 ---
 
-## Step 3: 生成 Mermaid Mindmap
+## Step 3: 根据用户选择的 Format 分支执行
+
+### 分支 1：飞书文档（或两者都要）
+
+走下方 Step 4–6（生成 Mermaid → 创建飞书文档 → 写入画板 → 交付）。
+
+### 分支 2：HTML 文件（或两者都要）
+
+走下方「HTML 输出（Markmap）」一节，生成本地 `.html` 文件并用 Markmap 渲染交互式思维导图。
+
+如果用户选了「两者都要」，两个分支都执行。
+
+---
+
+## 飞书文档输出
+
+### Step 4: 生成 Mermaid Mindmap
 
 将解析结果转换为 Mermaid mindmap 语法。详见下方「Mermaid Mindmap 生成规范」。
 根据用户在 Step 2 的选择决定节点文字的语言和是否包含摘要。
 
 ---
 
-## Step 4: 创建飞书文档（含空白画板占位）
+### Step 5: 创建飞书文档（含空白画板占位）
 
 使用 `lark-cli docs +create` 创建文档：
 
@@ -132,7 +161,7 @@ lark-cli docs +create --api-version v2 --content '<title>📋 [文件名] 结构
 
 ---
 
-## Step 5: 写入思维导图到画板
+### Step 6: 写入思维导图到画板
 
 `lark-cli` 原生支持 `--input_format mermaid`，无需额外工具。
 
@@ -153,9 +182,150 @@ lark-cli whiteboard +update \
 
 ---
 
-## Step 6: 交付
+### Step 7: 交付（飞书）
 
 向用户报告飞书文档 URL、节点统计。详见下方「交付规范」。
+
+---
+
+## HTML 输出（Markmap）
+
+当用户选择「HTML 文件」或「两者都要」时，生成一个自包含的 HTML 文件，用 Markmap 渲染交互式思维导图。
+
+### 为什么用 Markmap 而不是 Mermaid
+
+- Markmap 专为 Markdown → 思维导图设计，直接支持 `#` 标题语法
+- 交互式：缩放、拖拽平移、节点折叠/展开
+- 零依赖 CDN 加载（d3 + markmap-view + markmap-lib），无需本地安装
+- 深色/浅色主题可切换
+
+### 生成步骤
+
+#### Step H1: 将解析结果转回 Markdown 文本
+
+把 Step 1 解析出的标题层级（根据 Language 和 Depth 选择后的版本）拼回 Markdown 格式，作为 Markmap 的输入。
+
+格式要求：
+- 根节点作为 `#` 标题
+- 二级标题用 `##`，三级用 `###`，以此类推
+- 如果用户选了「标题加简短摘要」，摘要作为标题下的正文段落（不加 `#`）
+- 在 Markdown 顶部加入 YAML front matter 配置：
+
+```yaml
+---
+title: [文档标题] 结构导图
+markmap:
+  colorFreezeLevel: 2
+  maxWidth: 320
+  initialExpandLevel: 2
+---
+```
+
+- `initialExpandLevel: 2`：默认展开到 h2，h3 以下需点击展开（避免节点过多时初始显示杂乱）
+- 如果总节点数 < 20，可以 `initialExpandLevel: -1` 全部展开
+
+#### Step H2: 生成 HTML 文件
+
+创建一个自包含的 `.html` 文件，内嵌：
+1. 深色主题 CSS（背景 `#1a1a2e`，浅色文字，毛玻璃工具栏）
+2. CDN 引用 d3、markmap-view、markmap-lib（从 jsdelivr 加载最新稳定版）
+3. 工具栏按钮：自适应、放大、缩小
+4. Markmap 初始化脚本
+5. 将 Step H1 拼好的 Markdown 文本作为字符串嵌入 `<script>` 中
+
+模板结构（每次生成时直接使用这个模板，替换 `__MARKDOWN_CONTENT__` 和 `__TITLE__`）：
+
+```html
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>__TITLE__ — 结构思维导图</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a2e; font-family: system-ui, sans-serif; }
+  #mindmap { width: 100vw; height: 100vh; }
+  .toolbar {
+    position: fixed; top: 12px; right: 12px; z-index: 100;
+    display: flex; gap: 8px;
+  }
+  .toolbar button {
+    background: rgba(255,255,255,0.12); color: #ccc;
+    border: 1px solid rgba(255,255,255,0.15);
+    padding: 6px 14px; border-radius: 6px; cursor: pointer;
+    font-size: 13px; backdrop-filter: blur(8px);
+    transition: all 0.2s;
+  }
+  .toolbar button:hover { background: rgba(255,255,255,0.22); color: #fff; }
+  .info {
+    position: fixed; bottom: 12px; left: 12px; z-index: 100;
+    color: rgba(255,255,255,0.35); font-size: 12px;
+  }
+  svg { cursor: grab; }
+  svg:active { cursor: grabbing; }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <button onclick="mm.fit()">🔍 自适应</button>
+  <button onclick="mm.rescale(1.3)">➕ 放大</button>
+  <button onclick="mm.rescale(0.7)">➖ 缩小</button>
+</div>
+<div id="mindmap"></div>
+<div class="info">🖱 拖拽平移 | 滚轮缩放 | 点击节点折叠/展开 | __TITLE__</div>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://cdn.jsdelivr.net/npm/markmap-view@0.17"></script>
+<script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.17"></script>
+<script>
+(async () => {
+  const { Transformer } = window.markmap;
+  const { Markmap } = window.markmap;
+  const md = `__MARKDOWN_CONTENT__`;
+  const transformer = new Transformer();
+  const { root } = transformer.transform(md);
+  const mm = new Markmap('#mindmap', { autoFit: true, duration: 500 });
+  window.mm = mm;
+  mm.setData(root);
+  await mm.fit();
+})();
+</script>
+</body>
+</html>
+```
+
+**替换规则**：
+- `__TITLE__` → 文档标题（取源 MD 的 h1 或文件名）
+- `__MARKDOWN_CONTENT__` → Step H1 拼好的 Markdown 文本。**注意**：Markdown 中的反引号 `` ` ``、美元符号 `$`、反斜杠 `\` 需要正确处理。用模板字符串时，确保 `$` 不被 JavaScript 解释为变量插值
+
+#### Step H3: 保存并打开
+
+将 HTML 文件保存到 `/tmp/[文件名]-mindmap.html`，然后用 `open` 命令在浏览器中打开：
+
+```bash
+open /tmp/[文件名]-mindmap.html
+```
+
+#### Step H4: 交付（HTML）
+
+告知用户：
+- 文件路径
+- 交互方式：拖拽平移、滚轮缩放、右上角按钮自适应/放大/缩小、点击节点折叠/展开
+- 文件完全自包含（除了 CDN 引用），可以复制到任何地方
+
+示例：
+```
+✅ HTML 思维导图已生成！
+
+📄 文件：/tmp/frontend-slides-mindmap.html
+
+交互方式：
+- 🖱 拖拽平移 | 滚轮缩放
+- 右上角按钮：自适应 / 放大 / 缩小
+- 点击节点折叠/展开子节点
+- 零依赖，浏览器直接打开即可
+```
 
 ---
 
@@ -209,9 +379,12 @@ mindmap
 
 ## 交付规范
 
-操作完成后，向用户报告：
+根据用户选择的 Format，分别交付：
 
-1. 飞书文档 URL（Step 4 返回的 `data.document.url`）
+### 飞书文档
+
+向用户报告：
+1. 飞书文档 URL
 2. 简要说明解析到的标题数量和层级深度
 
 示例：
@@ -228,13 +401,25 @@ mindmap
 打开文档即可查看结构思维导图画板。
 ```
 
+### HTML 文件
+
+向用户报告：
+1. 文件路径
+2. 交互方式（拖拽、缩放、折叠、自适应按钮）
+3. 文件可复制到任意位置，浏览器直接打开
+
+### 两者都要
+
+同时按上述两种格式分别报告。
+
 ---
 
 ## 依赖
 
-- `lark-cli` — 飞书命令行工具（需已认证）
-- `lark-doc` skill — 文档创建参考
-- `lark-whiteboard` skill — 画板写入参考
+- `lark-cli` — 飞书命令行工具（需已认证）。仅飞书文档输出需要
+- `lark-doc` skill — 文档创建参考。仅飞书文档输出需要
+- `lark-whiteboard` skill — 画板写入参考。仅飞书文档输出需要
+- Markmap — CDN 加载（d3 + markmap-view + markmap-lib），无需本地安装。仅 HTML 输出需要
 
 ## 边界情况
 
@@ -244,3 +429,5 @@ mindmap
 - **MD 文件没有任何标题**：提示用户该文件没有 Markdown 标题结构，无法生成有层级的思维导图（可询问是否仍要继续，把段落首句作为扁平节点）
 - **lark-cli 认证失败**：提示用户运行 `lark-cli config init` 完成认证
 - **画板写入失败**：检查 board_token 是否正确；确认 `--source` 使用了相对路径（如 `@./mindmap.mmd`）而非绝对路径；重试一次；仍失败则将 Mermaid 代码提供给用户，让其手动创建画板
+- **HTML 中 Markdown 内容含模板字符串特殊字符**（`` ` ``、`$`、`\`）：在嵌入 JavaScript 模板字符串前，将 `` ` `` 替换为 `\``，将 `$` 替换为 `\$`，将 `\` 替换为 `\\`
+- **CDN 加载失败**（离线环境）：告知用户 Markmap 需要首次加载时联网拉取 CDN 资源，之后浏览器缓存可离线使用
