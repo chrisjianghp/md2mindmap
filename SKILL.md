@@ -217,12 +217,13 @@ title: [文档标题] 结构导图
 markmap:
   colorFreezeLevel: 2
   maxWidth: 320
-  initialExpandLevel: 2
+  initialExpandLevel: 1
 ---
 ```
 
-- `initialExpandLevel: 2`：默认展开到 h2，h3 以下需点击展开（避免节点过多时初始显示杂乱）
-- 如果总节点数 < 20，可以 `initialExpandLevel: -1` 全部展开
+- `initialExpandLevel: 1`：默认只展开第一级分支，用户打开后先看到整体骨架，再点击展开细节
+- 如果用户明确要求全部展开，或节点数很少（< 20），可以改为 `initialExpandLevel: -1`
+- 如果用户明确要求默认展开到二级，则使用 `initialExpandLevel: 2`
 
 #### Step H2: 生成 HTML 文件
 
