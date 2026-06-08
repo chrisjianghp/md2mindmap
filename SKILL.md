@@ -226,12 +226,12 @@ markmap:
 
 #### Step H2: 生成 HTML 文件
 
-创建一个自包含的 `.html` 文件，内嵌：
-1. 深色主题 CSS（背景 `#1a1a2e`，浅色文字，毛玻璃工具栏）
-2. CDN 引用 d3、markmap-view、markmap-lib（从 jsdelivr 加载最新稳定版）
-3. 工具栏按钮：自适应、放大、缩小
-4. Markmap 初始化脚本
-5. 将 Step H1 拼好的 Markdown 文本作为字符串嵌入 `<script>` 中
+创建一个 `.html` 文件，内嵌：
+1. 深色主题 CSS（背景 `#1a1a2e`，浅色文字，提示条）
+2. 一个 `<div class="markmap"><script type="text/template">...</script></div>` 容器
+3. CDN 引用 `markmap-autoloader`（从 jsdelivr 加载稳定版），由 autoloader 自动渲染
+
+**优先使用 `markmap-autoloader`，不要手写 `new Markmap(...)` 初始化。**手写初始化在不同 CDN 版本和本地 `file://` 打开时容易因为全局对象暴露差异导致 Chrome 空白或渲染不正常；autoloader 是官方推荐的最稳嵌入方式。
 
 模板结构（每次生成时直接使用这个模板，替换 `__MARKDOWN_CONTENT__` 和 `__TITLE__`）：
 
@@ -241,63 +241,51 @@ markmap:
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>__TITLE__ — 结构思维导图</title>
+<title>__TITLE__ — Mindmap</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #1a1a2e; font-family: system-ui, sans-serif; }
-  #mindmap { width: 100vw; height: 100vh; }
-  .toolbar {
-    position: fixed; top: 12px; right: 12px; z-index: 100;
-    display: flex; gap: 8px;
+  * { box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%; margin: 0; overflow: hidden;
+    background: #1a1a2e;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
-  .toolbar button {
-    background: rgba(255,255,255,0.12); color: #ccc;
-    border: 1px solid rgba(255,255,255,0.15);
-    padding: 6px 14px; border-radius: 6px; cursor: pointer;
-    font-size: 13px; backdrop-filter: blur(8px);
-    transition: all 0.2s;
+  .header {
+    position: fixed; top: 12px; left: 16px; z-index: 10;
+    color: rgba(255,255,255,0.82);
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px; padding: 8px 12px;
+    backdrop-filter: blur(10px); font-size: 14px;
   }
-  .toolbar button:hover { background: rgba(255,255,255,0.22); color: #fff; }
-  .info {
-    position: fixed; bottom: 12px; left: 12px; z-index: 100;
-    color: rgba(255,255,255,0.35); font-size: 12px;
+  .hint {
+    position: fixed; bottom: 12px; left: 16px; z-index: 10;
+    color: rgba(255,255,255,0.45); font-size: 12px;
+    background: rgba(0,0,0,0.18);
+    border-radius: 8px; padding: 6px 10px;
   }
-  svg { cursor: grab; }
-  svg:active { cursor: grabbing; }
+  .markmap { width: 100vw; height: 100vh; }
+  .markmap > svg { width: 100%; height: 100%; display: block; }
 </style>
 </head>
 <body>
-<div class="toolbar">
-  <button onclick="mm.fit()">🔍 自适应</button>
-  <button onclick="mm.rescale(1.3)">➕ 放大</button>
-  <button onclick="mm.rescale(0.7)">➖ 缩小</button>
-</div>
-<div id="mindmap"></div>
-<div class="info">🖱 拖拽平移 | 滚轮缩放 | 点击节点折叠/展开 | __TITLE__</div>
+<div class="header">__TITLE__ — mindmap</div>
+<div class="hint">Drag to pan · Scroll to zoom · Click nodes to fold/unfold</div>
 
-<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-<script src="https://cdn.jsdelivr.net/npm/markmap-view@0.17"></script>
-<script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.17"></script>
-<script>
-(async () => {
-  const { Transformer } = window.markmap;
-  const { Markmap } = window.markmap;
-  const md = `__MARKDOWN_CONTENT__`;
-  const transformer = new Transformer();
-  const { root } = transformer.transform(md);
-  const mm = new Markmap('#mindmap', { autoFit: true, duration: 500 });
-  window.mm = mm;
-  mm.setData(root);
-  await mm.fit();
-})();
+<div class="markmap">
+<script type="text/template">
+__MARKDOWN_CONTENT__
 </script>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/markmap-autoloader@0.17"></script>
 </body>
 </html>
 ```
 
 **替换规则**：
 - `__TITLE__` → 文档标题（取源 MD 的 h1 或文件名）
-- `__MARKDOWN_CONTENT__` → Step H1 拼好的 Markdown 文本。**注意**：Markdown 中的反引号 `` ` ``、美元符号 `$`、反斜杠 `\` 需要正确处理。用模板字符串时，确保 `$` 不被 JavaScript 解释为变量插值
+- `__MARKDOWN_CONTENT__` → Step H1 拼好的 Markdown 文本
+- 因为 Markdown 放在 `<script type="text/template">` 中，不需要像 JS 模板字符串那样转义 `$` 或反引号；但如果 Markdown 内容里出现 `</script>`，需要替换为 `<\/script>`，避免提前结束 script 标签
 
 #### Step H3: 保存并打开
 
@@ -311,7 +299,7 @@ open /tmp/[文件名]-mindmap.html
 
 告知用户：
 - 文件路径
-- 交互方式：拖拽平移、滚轮缩放、右上角按钮自适应/放大/缩小、点击节点折叠/展开
+- 交互方式：拖拽平移、滚轮缩放、点击节点折叠/展开
 - 文件完全自包含（除了 CDN 引用），可以复制到任何地方
 
 示例：
@@ -429,5 +417,6 @@ mindmap
 - **MD 文件没有任何标题**：提示用户该文件没有 Markdown 标题结构，无法生成有层级的思维导图（可询问是否仍要继续，把段落首句作为扁平节点）
 - **lark-cli 认证失败**：提示用户运行 `lark-cli config init` 完成认证
 - **画板写入失败**：检查 board_token 是否正确；确认 `--source` 使用了相对路径（如 `@./mindmap.mmd`）而非绝对路径；重试一次；仍失败则将 Mermaid 代码提供给用户，让其手动创建画板
-- **HTML 中 Markdown 内容含模板字符串特殊字符**（`` ` ``、`$`、`\`）：在嵌入 JavaScript 模板字符串前，将 `` ` `` 替换为 `\``，将 `$` 替换为 `\$`，将 `\` 替换为 `\\`
+- **HTML 中 Markdown 内容含 `</script>`**：在嵌入 `<script type="text/template">` 前替换为 `<\/script>`，避免提前结束 script 标签
 - **CDN 加载失败**（离线环境）：告知用户 Markmap 需要首次加载时联网拉取 CDN 资源，之后浏览器缓存可离线使用
+- **Chrome 打开 HTML 显示空白或不正常**：优先确认模板使用的是 `markmap-autoloader`，不要使用手写 `new Markmap(...)` 初始化；必要时换用 `open -a "Google Chrome" /tmp/xxx.html` 重新打开
