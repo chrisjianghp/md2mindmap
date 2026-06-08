@@ -1,4 +1,4 @@
-# md2mindmapinlarkdoc
+# md2mindmap
 
 A [Claude Code Skill](https://docs.claude.com/claude-code) that converts a **Markdown document** — local file or online URL — into a Mermaid mindmap rendered on a Lark/Feishu whiteboard inside a freshly-created Lark doc.
 
@@ -23,7 +23,7 @@ Then it parses the heading hierarchy (h1–h6), generates a Mermaid mindmap, cre
 Clone into your Claude Code skills directory:
 
 ```bash
-git clone https://github.com/chrisjianghp/md2mindmapinlarkdoc.git ~/.claude/skills/md2mindmapinlarkdoc
+git clone https://github.com/chrisjianghp/md2mindmap.git ~/.claude/skills/md2mindmap
 ```
 
 That's it. Claude Code will pick up the skill on the next session.
@@ -49,7 +49,7 @@ The skill triggers automatically based on your phrasing.
 ## Repository layout
 
 ```
-md2mindmapinlarkdoc/
+md2mindmap/
 ├── SKILL.md            # The skill definition (what Claude reads)
 ├── .gitignore
 ├── LICENSE

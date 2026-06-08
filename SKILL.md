@@ -1,5 +1,5 @@
 ---
-name: md2mindmapinlarkdoc
+name: md2mindmap
 description: >
   解析 Markdown 文档的结构（标题层级）并生成飞书思维导图画板。支持两种输入：
   (1) 本地 .md 文件路径；
@@ -179,7 +179,7 @@ description: >
 
 ```bash
 lark-cli docs +create --api-version v2 --content '<title>📋 [文件名] 结构导图</title>
-<callout emoji="🗺️"><p>本文档由 md2mindmapinlarkdoc 自动生成，展示原始 Markdown 文档的结构层级。</p></callout>
+<callout emoji="🗺️"><p>本文档由 md2mindmap 自动生成，展示原始 Markdown 文档的结构层级。</p></callout>
 <h2>结构思维导图</h2>
 <whiteboard type="blank"></whiteboard>'
 ```
