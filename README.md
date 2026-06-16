@@ -15,13 +15,14 @@ Two input modes:
 - **Mode A — Local MD file**: Path like `~/path/to/README.md` or `./docs/intro.md`. Read with the `Read` tool.
 - **Mode B — Online MD URL**: A URL pointing to raw markdown — GitHub raw links (`https://raw.githubusercontent.com/...`), GitHub blob pages (auto-converted to raw), or any HTTP(S) link returning markdown text. Fetched with `WebFetch`.
 
-Before generating, the skill resolves three preferences:
+Before generating, the skill resolves four preferences:
 
 1. **Language**: keep the source language or translate to Chinese
 2. **Depth**: title skeleton only, or titles + short summaries
 3. **Format**: HTML file, Lark/Feishu document, or both
+4. **Publish**: keep HTML local, deploy to Vercel, deploy to Netlify, or deploy to both
 
-If the user already specified any of these in the prompt (for example "生成 HTML", "仅标题", "保持原文"), the skill respects that and only asks about missing choices.
+If the user already specified any of these in the prompt (for example "生成 HTML", "仅标题", "保持原文", "部署到 Vercel"), the skill respects that and only asks about missing choices.
 
 ## HTML output
 
@@ -36,6 +37,11 @@ Features:
   - Uses `html2canvas` to snapshot the rendered mindmap into a PNG
   - Opens the browser print dialog; choose **Save as PDF**
   - This avoids Chrome's SVG `foreignObject` / Chinese font issues when printing
+- Optional online publishing
+  - Keep the HTML local by default
+  - Deploy to Vercel
+  - Deploy to Netlify
+  - Deploy to both Vercel and Netlify
 
 ## Lark/Feishu output
 
@@ -61,6 +67,9 @@ That's it. Claude Code will pick up the skill on the next session.
 
 - [Claude Code](https://docs.claude.com/claude-code) with skills support
 - For HTML output: internet access to load CDN resources (`markmap-autoloader`, `html2canvas`)
+- For online publishing:
+  - Vercel: `npx vercel` and first-time `npx vercel login`
+  - Netlify: `npx netlify` and first-time `npx netlify login`
 - For Lark/Feishu output:
   - [`lark-cli`](https://github.com/larksuite/lark-cli) — authenticated (`lark-cli config init`)
   - Companion skills (usually bundled together): `lark-shared`, `lark-doc`, `lark-whiteboard`
@@ -74,6 +83,8 @@ Just ask Claude things like:
 - "可视化一下这个 GitHub 文档：https://raw.githubusercontent.com/owner/repo/main/README.md"
 - "解析 https://github.com/owner/repo/blob/main/SKILL.md 到 HTML"
 - "保持原文，仅标题，生成 HTML 思维导图：~/docs/architecture.md"
+- "生成 HTML 并部署到 Vercel：~/docs/architecture.md"
+- "生成 HTML，同时发布到 Vercel 和 Netlify：<github-md-url>"
 - "把这个 README 用飞书画板画出来"
 - "Turn this markdown into a Lark whiteboard mindmap: <url-or-path>"
 

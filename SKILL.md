@@ -43,7 +43,7 @@ description: >
 
 ## 用户决策：只补问缺失的信息
 
-读完 MD 内容、识别出标题结构之后，检查用户原始请求中是否已经明确指定了以下三个决策：Language、Depth、Format。**只对缺失的决策使用 `AskUserQuestion` 询问；用户已经明确指定的，不要重复询问。**
+读完 MD 内容、识别出标题结构之后，检查用户原始请求中是否已经明确指定了以下四个决策：Language、Depth、Format、Publish。**只对缺失的决策使用 `AskUserQuestion` 询问；用户已经明确指定的，不要重复询问。**
 
 如果有多个缺失决策，把它们合并到一次 `AskUserQuestion` 调用中一起问，不要分多次问。这样既保留必要的确认，又避免用户已经说清楚时被重复打断。
 
@@ -100,16 +100,38 @@ description: >
   2. `HTML 文件` — 描述："生成本地 HTML 文件，用 Markmap 渲染交互式思维导图，支持缩放/折叠/搜索，浏览器直接打开"
   3. `两者都要` — 描述："同时生成飞书文档和 HTML 文件"
 
+### 决策 4：Publish（线上发布）
+
+仅当 Format 包含 `HTML 文件`（即 `HTML 文件` 或 `两者都要`）时才考虑此决策；如果只生成飞书文档，则跳过 Publish。
+
+如果用户没有明确指定是否发布到线上环境，必须询问。线上发布会把 HTML 上传到第三方托管平台，产生公开 URL；这是外向发布动作，不应默认执行。
+
+**视为已明确指定的表达示例**：
+- `不发布`、`只本地`、`不要上线`、`不要部署`、`不用线上` → 选择 `不发布`
+- `部署到 Vercel`、`发布到 Vercel`、`上 Vercel` → 选择 `Vercel`
+- `部署到 Netlify`、`发布到 Netlify`、`上 Netlify` → 选择 `Netlify`
+- `Vercel 和 Netlify 都发布`、`两个平台都部署` → 选择 `两者都发布`
+
+**缺失时询问参数**：
+- header：`Publish`（≤ 12 字）
+- question：`HTML 思维导图是否发布到线上环境？`
+- 选项（固定四个，不要自行扩展）：
+  1. `不发布` — 描述："只生成本地 HTML 文件，不上传到线上环境（默认安全选择）"
+  2. `Vercel` — 描述："部署到 Vercel，生成可分享的公网 URL"
+  3. `Netlify` — 描述："部署到 Netlify，生成可分享的公网 URL"
+  4. `两者都发布` — 描述："同时部署到 Vercel 和 Netlify"
+
 ### 默认值（仅当用户要求不要提问或上下文强烈暗示时使用）
 
 常规情况下，缺失决策应询问。只有当用户明确说"不用问我/按默认来/直接生成"，或前文同一任务已经刚刚选择过相同偏好时，才使用默认值：
 - Language：保持原文
 - Depth：仅标题骨架
 - Format：HTML 文件
+- Publish：不发布
 
 ### 询问时机
 
-读完 MD 内容、识别出标题结构之后，**调用 `docs +create` 或生成 HTML 之前**。缺哪些问哪些；全部已明确时直接继续。
+读完 MD 内容、识别出标题结构之后，**调用 `docs +create`、生成 HTML 或发布线上环境之前**。缺哪些问哪些；全部已明确时直接继续。
 
 ---
 
@@ -143,10 +165,11 @@ description: >
 ## Step 2: 补齐用户决策
 
 执行上面「用户决策：只补问缺失的信息」一节：
-1. 先从用户原始请求中识别 Language、Depth、Format 是否已经明确指定
+1. 先从用户原始请求中识别 Language、Depth、Format、Publish 是否已经明确指定
 2. 对已明确的决策直接采用，不再询问
 3. 对缺失的决策，用一次 `AskUserQuestion` 合并询问
-4. 如果三个决策都已明确，则跳过 `AskUserQuestion`，直接继续
+4. 如果 Format 不包含 HTML，则跳过 Publish 决策
+5. 如果所有适用决策都已明确，则跳过 `AskUserQuestion`，直接继续
 
 ---
 
@@ -160,7 +183,9 @@ description: >
 
 走下方「HTML 输出（Markmap）」一节，生成本地 `.html` 文件并用 Markmap 渲染交互式思维导图。
 
-如果用户选了「两者都要」，两个分支都执行。
+如果 Publish 选择了 `Vercel`、`Netlify` 或 `两者都发布`，生成 HTML 后继续执行「线上发布」一节。
+
+如果用户选了「两者都要」，飞书和 HTML 两个分支都执行。
 
 ---
 
@@ -452,6 +477,90 @@ open /tmp/[文件名]-mindmap.html
 
 ---
 
+## 线上发布
+
+仅当用户的 Format 包含 HTML 且 Publish 不是 `不发布` 时执行。线上发布会生成公网 URL，属于外向发布动作；如果用户没有明确指定发布平台，必须通过 Publish 决策询问，不要默认发布。
+
+### 发布前准备
+
+把生成的 HTML 文件复制到临时目录并命名为 `index.html`：
+
+```bash
+rm -rf /tmp/[slug]-deploy
+mkdir -p /tmp/[slug]-deploy
+cp /tmp/[file]-mindmap.html /tmp/[slug]-deploy/index.html
+```
+
+### 发布到 Vercel
+
+1. 检查 Vercel CLI 和登录状态：
+
+```bash
+npx vercel --version
+npx vercel whoami
+```
+
+2. 如果未登录，引导用户运行：
+
+```bash
+! npx vercel login
+```
+
+等待用户完成网页登录授权后再继续。
+
+3. 部署：
+
+```bash
+cd /tmp/[slug]-deploy
+npx vercel --prod --yes
+```
+
+4. 从输出中提取并交付：
+- `Production` 或 `Aliased` URL（优先交付稳定 alias URL）
+- Inspect URL（可选）
+
+### 发布到 Netlify
+
+1. 检查 Netlify CLI 和登录状态：
+
+```bash
+npx netlify --version
+npx netlify status
+```
+
+2. 如果未登录，引导用户运行：
+
+```bash
+! npx netlify login
+```
+
+等待用户完成网页登录授权后再继续。
+
+3. 部署：
+
+```bash
+npx netlify deploy --prod --dir /tmp/[slug]-deploy
+```
+
+4. 从输出中提取并交付：
+- `Production URL`
+- `Unique deploy URL`
+- Build logs URL（可选）
+
+### 发布交付格式
+
+示例：
+
+```text
+✅ HTML 思维导图已生成并发布！
+
+本地文件：/tmp/[file]-mindmap.html
+Vercel：https://example.vercel.app
+Netlify：https://example.netlify.app
+```
+
+---
+
 ## Mermaid Mindmap 生成规范
 
 ### 语法格式
@@ -528,8 +637,9 @@ mindmap
 
 向用户报告：
 1. 文件路径
-2. 交互方式（拖拽、缩放、折叠、自适应按钮）
-3. 文件可复制到任意位置，浏览器直接打开
+2. 交互方式（拖拽、缩放、折叠、导出 PDF）
+3. 如果 Publish 不是 `不发布`，同时报告 Vercel / Netlify 的线上 URL
+4. 文件可复制到任意位置，浏览器直接打开
 
 ### 两者都要
 
@@ -543,6 +653,9 @@ mindmap
 - `lark-doc` skill — 文档创建参考。仅飞书文档输出需要
 - `lark-whiteboard` skill — 画板写入参考。仅飞书文档输出需要
 - Markmap — CDN 加载（d3 + markmap-view + markmap-lib），无需本地安装。仅 HTML 输出需要
+- `html2canvas` — CDN 加载，仅 HTML 导出 PDF 需要
+- Vercel CLI (`npx vercel`) — 仅 Publish 选择 Vercel 时需要，首次使用需 `npx vercel login`
+- Netlify CLI (`npx netlify`) — 仅 Publish 选择 Netlify 时需要，首次使用需 `npx netlify login`
 
 ## 边界情况
 
@@ -557,3 +670,6 @@ mindmap
 - **Chrome 打开 HTML 显示空白或不正常**：优先确认模板使用的是 `markmap-autoloader`，不要使用手写 `new Markmap(...)` 初始化；必要时换用 `open -a "Google Chrome" /tmp/xxx.html` 重新打开
 - **导出 PDF 行为**：HTML 内的「导出 PDF」按钮会通过 `html2canvas` 把当前思维导图 DOM 截成 PNG 位图，再在新窗口打印。用户需要在系统打印面板中选择"保存为 PDF"。不要承诺自动下载 PDF 文件
 - **PDF 只有线没有文字 / 中文丢失**：这是 Chrome 打印 SVG `foreignObject` 或 SVG `<text>` 字体嵌入的常见问题。不要依赖 CSS 改文字颜色，也不要把 `foreignObject` 转成 `<text>`；模板应使用 `html2canvas` 截图为 PNG 的导出方案，牺牲文字可选中性来保证视觉正确
+- **用户未明确要求线上发布**：必须询问 Publish，并提供 `不发布` 选项。不要默认把 HTML 上传到 Vercel/Netlify
+- **Vercel/Netlify 未登录**：提示用户在 Claude Code 中运行 `! npx vercel login` 或 `! npx netlify login` 完成网页登录授权；授权完成后再继续部署
+- **部署目录**：部署前把 HTML 复制为临时目录下的 `index.html`，避免直接部署 `/tmp` 或包含无关文件的目录
