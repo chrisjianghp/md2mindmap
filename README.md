@@ -33,6 +33,7 @@ Features:
 - Interactive zoom, pan, fold/unfold
 - Dark theme with bright readable text
 - Default first-level expansion (`initialExpandLevel: 1`) for a clean overview
+- When summaries are enabled, summaries are embedded inside title nodes as clear subtitle text, so users can see section gist even when deeper branches are collapsed
 - PDF export button
   - Uses `html2canvas` to snapshot the rendered mindmap into a PNG
   - Opens the browser print dialog; choose **Save as PDF**

@@ -158,6 +158,9 @@ description: >
 - 忽略纯 YAML front matter（开头 `---` 之间的内容）
 - 忽略代码块内（` ``` ` 围起的部分）出现的"#"，那些不是标题
 - 标题间的正文只取第一句作为摘要，不做深度内容提取
+- 摘要提取时跳过无语义装饰内容：纯图片、纯链接、徽章、Star History 图片、空链接（如 `[](...)`）、只包含 URL 的行、语言切换链接（如 `中文版 | English`）、目录导航链接（如 `安装 · 认证 · 命令`）
+- 根节点摘要尤其要跳过顶部 badge、语言切换、目录导航，优先提取第一个真正介绍项目/文档用途的正文段落
+- 如果摘要超过 30 字，显示文本截断为 30 字并加 `…`，但要保留完整摘要供 HTML 输出的自定义悬浮提示使用
 - 如果标题本身超过 20 字，在思维导图中截断到 20 字并加 `…`
 
 ---
@@ -264,7 +267,17 @@ lark-cli whiteboard +update \
 格式要求：
 - 根节点作为 `#` 标题
 - 二级标题用 `##`，三级用 `###`，以此类推
-- 如果用户选了「标题加简短摘要」，摘要作为标题下的正文段落（不加 `#`）
+- 如果用户选了「仅标题骨架」，只输出标题行
+- 如果用户选了「标题加简短摘要」，**不要把摘要作为普通子节点**；而是把摘要嵌入对应标题节点内部，让默认只展开第一级时也能看到概要。格式如下：
+  ```markdown
+  ## 章节标题<br><span class="summary" data-full-summary="完整摘要内容">一句简短摘要…</span>
+  ```
+- 摘要展示要求：清晰、克制、像副标题；避免和标题混成一行。显示文本控制在 30 字以内；如果被截断，必须在 `data-full-summary` 属性中保留完整摘要
+- 不要依赖原生 `title` 悬浮提示；Markmap 的 SVG/foreignObject 场景下原生 title 不稳定。HTML 模板必须提供自定义 tooltip：监听 `.summary` 的 `mouseenter/mousemove/mouseleave`，读取 `data-full-summary` 并显示浮层
+- 根节点如果有摘要，显示文本应直接使用完整概要（通常是第一个真正介绍项目/文档用途的正文句子），不要截断成前几个字；但必须跳过顶部 badge、语言切换和目录导航
+- 非根节点摘要显示文本控制在 30 字以内；如果被截断，通过 `data-full-summary` + 自定义 tooltip 展示完整摘要
+- `data-full-summary` 和摘要正文都要做 HTML 转义：`&` → `&amp;`、`<` → `&lt;`、`>` → `&gt;`、`"` → `&quot;`
+- 如果保留原文，摘要也必须来自原文截断，不要改写
 - 在 Markdown 顶部加入 YAML front matter 配置：
 
 ```yaml
@@ -348,6 +361,42 @@ markmap:
     -webkit-text-fill-color: rgba(255,255,255,0.96) !important;
     text-shadow: 0 1px 2px rgba(0,0,0,0.35);
   }
+  .markmap .summary {
+    display: block;
+    margin-top: 6px;
+    max-width: 280px;
+    padding: 2px 6px 2px 7px;
+    border-left: 2px solid rgba(125,211,252,0.75);
+    border-radius: 4px;
+    background: rgba(14,165,233,0.10);
+    color: rgba(186,230,253,0.88) !important;
+    -webkit-text-fill-color: rgba(186,230,253,0.88) !important;
+    font-size: 9.5px;
+    line-height: 1.35;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    white-space: normal;
+    text-shadow: none;
+    cursor: help;
+  }
+  .tooltip {
+    position: fixed;
+    z-index: 2000;
+    max-width: min(520px, calc(100vw - 32px));
+    padding: 10px 12px;
+    border: 1px solid rgba(125,211,252,0.35);
+    border-radius: 10px;
+    background: rgba(15,23,42,0.96);
+    color: rgba(255,255,255,0.94);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+    font-size: 13px;
+    line-height: 1.55;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.12s ease, transform 0.12s ease;
+  }
+  .tooltip.visible { opacity: 1; transform: translateY(0); }
   @media print {
     @page { size: landscape; margin: 0; }
     html, body {
@@ -365,6 +414,7 @@ markmap:
   <button onclick="exportPDF()">导出 PDF</button>
 </div>
 <div class="hint">Drag to pan · Scroll to zoom · Click nodes to fold/unfold · Export PDF via browser print</div>
+<div id="summary-tooltip" class="tooltip"></div>
 
 <div class="markmap">
 <script type="text/template">
@@ -374,6 +424,42 @@ __MARKDOWN_CONTENT__
 
 <script src="https://cdn.jsdelivr.net/npm/markmap-autoloader@0.17"></script>
 <script>
+function setupSummaryTooltip() {
+  const tooltip = document.getElementById('summary-tooltip');
+  if (!tooltip) return;
+
+  const place = (event) => {
+    const pad = 16;
+    const rect = tooltip.getBoundingClientRect();
+    let x = event.clientX + 14;
+    let y = event.clientY + 14;
+    if (x + rect.width > window.innerWidth - pad) x = window.innerWidth - rect.width - pad;
+    if (y + rect.height > window.innerHeight - pad) y = event.clientY - rect.height - 14;
+    tooltip.style.left = `${Math.max(pad, x)}px`;
+    tooltip.style.top = `${Math.max(pad, y)}px`;
+  };
+
+  document.addEventListener('mouseover', (event) => {
+    const el = event.target.closest && event.target.closest('.summary');
+    if (!el) return;
+    const text = el.getAttribute('data-full-summary') || el.textContent || '';
+    if (!text.trim()) return;
+    tooltip.textContent = text;
+    tooltip.classList.add('visible');
+    place(event);
+  });
+  document.addEventListener('mousemove', (event) => {
+    if (tooltip.classList.contains('visible')) place(event);
+  });
+  document.addEventListener('mouseout', (event) => {
+    const el = event.target.closest && event.target.closest('.summary');
+    if (!el) return;
+    tooltip.classList.remove('visible');
+  });
+}
+
+setTimeout(setupSummaryTooltip, 500);
+
 function loadHtml2Canvas() {
   if (window.html2canvas) return Promise.resolve(window.html2canvas);
   return new Promise((resolve, reject) => {
@@ -445,6 +531,7 @@ async function exportPDF() {
 - `__TITLE__` → 文档标题（取源 MD 的 h1 或文件名）
 - `__MARKDOWN_CONTENT__` → Step H1 拼好的 Markdown 文本
 - 因为 Markdown 放在 `<script type="text/template">` 中，不需要像 JS 模板字符串那样转义 `$` 或反引号；但如果 Markdown 内容里出现 `</script>`，需要替换为 `<\/script>`，避免提前结束 script 标签
+- 如果把摘要嵌入标题节点（`<span class="summary" title="...">...</span>`），摘要文本和 `title` 属性都要做 HTML 转义：`&` → `&amp;`、`<` → `&lt;`、`>` → `&gt;`、`"` → `&quot;`，避免破坏节点 HTML
 
 #### Step H3: 保存并打开
 
